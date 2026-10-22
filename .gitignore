@@ -85,3 +85,15 @@ secrets/*
 
 # Mac files
 .DS_Store
+
+# converage
+.coverage
+coverage.xml
+
+# Dataset (download from Kaggle, see README)
+data/
+
+# MLflow tracking data (local runs, never committed)
+mlruns/
+mlartifacts/
+mlflow.db

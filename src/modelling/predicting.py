@@ -13,7 +13,7 @@ def predict(model: RegressorMixin, X: pd.DataFrame) -> np.ndarray:
 
     Args:
         model: A fitted regression model.
-        X: Features, preprocessed the same way as the training data.
+        X: Raw features, with the same columns as the training data.
 
     Returns:
         The predicted values, one per row of ``X``.
@@ -26,7 +26,7 @@ def predict_from_pickle(model_path: str | Path, X: pd.DataFrame) -> np.ndarray:
 
     Args:
         model_path: Path to the pickled model.
-        X: Features, preprocessed the same way as the training data.
+        X: Raw features, with the same columns as the training data.
 
     Returns:
         The predicted values, one per row of ``X``.

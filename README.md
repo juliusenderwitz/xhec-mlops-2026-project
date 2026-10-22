@@ -104,12 +104,37 @@ uv run pre-commit run --all-files      # run all hooks on the whole repo
 
 ```
 .
-├── .github/workflows/ci.yaml   # GitHub Actions CI
-├── .pre-commit-config.yaml     # pre-commit hooks
-├── pyproject.toml              # project metadata and dependencies
-├── uv.lock                     # pinned dependency versions
-├── tests/                      # pytest tests
-└── README.md
+├── .github/
+│   └── workflows/
+│       └── ci.yaml              # GitHub Actions CI pipeline (lint, format, test)
+├── assets/                      # Visual assets for documentation and guides
+├── data/                        # Local dataset storage (abalone.csv; gitignored)
+├── notebooks/                   # Jupyter notebooks for exploration and research
+│   ├── eda.ipynb                # Exploratory Data Analysis
+│   └── modelling.ipynb          # Model experimentation and MLflow tracking
+├── src/                         # Source code
+│   ├── modelling/               # ML training pipeline and Prefect orchestration
+│   │   ├── deployment.py        # Prefect deployment script for scheduled retraining
+│   │   ├── main.py              # End-to-end training flow entry point
+│   │   ├── predicting.py        # Model inference functions
+│   │   ├── preprocessing.py     # Data loading, cleaning, and feature encoding
+│   │   ├── training.py          # Model pipeline training and evaluation
+│   │   └── utils.py             # Serialization utilities (pickle/unpickle)
+│   └── web_service/             # Inference service and deployment artifacts
+│       └── local_objects/       # Serialized artifacts (model.pkl)
+├── tests/                       # Test suite executed with pytest
+│   ├── test_modelling/          # Unit tests for the modelling package
+│   │   ├── test_main.py         # Tests for the main training flow
+│   │   ├── test_predicting.py   # Tests for prediction routines
+│   │   ├── test_preprocessing.py# Tests for preprocessing and cleaning
+│   │   ├── test_training.py     # Tests for training and evaluation
+│   │   └── test_utils.py        # Tests for serialization helpers
+│   └── test_placeholder.py      # Placeholder test
+├── .gitignore                   # Files and directories ignored by Git
+├── .pre-commit-config.yaml      # Pre-commit git hooks configuration
+├── pyproject.toml               # Project metadata, dependencies, and tool settings
+├── README.md                    # Project documentation and setup instructions
+└── uv.lock                      # Lockfile with pinned dependency versions
 ```
 
 ## Experiment Tracking with MLflow

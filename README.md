@@ -19,8 +19,8 @@ We are building this as a production-style ML system, step by step:
 | Step | Content | Status |
 | --- | --- | --- |
 | 0 | Environment setup: dependencies, pre-commit hooks, CI | ✅ Done |
-| 1 | Model training and inference code | ⏳ To do |
-| 2 | Automated training pipeline with Prefect | ⏳ To do |
+| 1 | Model training and inference code | ✅ Done |
+| 2 | Automated training pipeline with Prefect | ✅ Done |
 | 3 | Prediction REST API (FastAPI + Pydantic) in Docker | ⏳ To do |
 
 ### Dataset
@@ -125,6 +125,35 @@ uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
 and open http://127.0.0.1:5000.
 
 `mlflow.db` and `mlruns/` are in `.gitignore`: never commit MLflow data, only the code that produces it.
+
+## Training Pipeline with Prefect
+
+The training code in `src/modelling` runs as a Prefect flow: each step (loading, cleaning, training, evaluating, saving the model) is a Prefect task. The commands below assume the dataset is saved as `data/abalone.csv`.
+
+1. Start the Prefect server (keep this terminal open):
+
+   ```bash
+   uv run prefect config set PREFECT_API_URL=http://0.0.0.0:4200/api
+   uv run prefect server start --host 0.0.0.0
+   ```
+
+   Open the UI at http://0.0.0.0:4200 (if it shows "Unable to connect to Prefect server", try http://127.0.0.1:4200 or another browser).
+
+2. In a second terminal, train the model once:
+
+   ```bash
+   uv run python src/modelling/main.py data/abalone.csv
+   ```
+
+   The run appears in the UI under **Runs**. Click it to see the graph of its tasks, their states and the logs (including the test metrics).
+
+3. Serve the deployment (retrains the model every Sunday at midnight):
+
+   ```bash
+   uv run python src/modelling/deployment.py
+   ```
+
+   The deployment and its scheduled runs appear in the UI under **Deployments**.
 
 ## Continuous Integration
 

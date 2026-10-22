@@ -89,3 +89,6 @@ secrets/*
 # converage
 .coverage
 coverage.xml
+
+# Dataset (download from Kaggle, see README)
+data/

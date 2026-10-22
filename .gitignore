@@ -85,3 +85,10 @@ secrets/*
 
 # Mac files
 .DS_Store
+
+# converage
+.coverage
+coverage.xml
+
+# Dataset (download from Kaggle, see README)
+data/

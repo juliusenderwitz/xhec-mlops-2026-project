@@ -38,3 +38,6 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = ["src/modelling"]
+
+[tool.uv]
+constraint-dependencies = ["fastapi<0.155; python_version < '3.11'"]

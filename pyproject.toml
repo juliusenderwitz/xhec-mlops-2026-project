@@ -15,7 +15,9 @@ description = "X-HEC MLOps Project on Abalone age prediction model"
 requires-python = ">=3.10,<3.12"
 
 dependencies = [
+    "pandas>=2.3.3",
     "pydantic>=2.9",
+    "scikit-learn>=1.7.2",
 ]
 
 [dependency-groups]
@@ -25,3 +27,6 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.8",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src/modelling"]

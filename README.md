@@ -139,17 +139,32 @@ uv run pre-commit run --all-files      # run all hooks on the whole repo
 
 ## Experiment Tracking with MLflow
 
-The [modelling notebook](notebooks/modelling.ipynb) logs every model as an MLflow run in the experiment `abalone-rings`: parameters, metrics (cross-validation and test RMSE / MAE / R²) and the fitted pipeline. The runs are stored locally in `mlflow.db` and `mlruns/` at the root of the repository.
+We track model experiments using **MLflow**: every model (the baseline and linear regression) logs its hyperparameters, dataset splits, cross-validation metrics, test metrics (RMSE, MAE, R²), and the fitted pipeline artifact to the `abalone-rings` experiment.
 
-To compare the runs in the MLflow UI, run the notebook, then from the root of the repository:
+The tracking data is stored locally in `mlflow.db` (SQLite) and `mlruns/` at the root of the repository. Both are excluded via `.gitignore`.
+
+### 1. Run the experiments
+
+Execute the experiment tracking script from the root of the repository:
+
+```bash
+uv run python src/modelling/experiment.py data/abalone.csv
+```
+
+This runs 5-fold cross-validation and test set evaluations for all candidate models and logs each run into `mlflow.db`.
+
+### 2. View results in the MLflow UI
+
+Start the local MLflow server:
 
 ```bash
 uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
 ```
 
-and open http://127.0.0.1:5000.
-
-`mlflow.db` and `mlruns/` are in `.gitignore`: never commit MLflow data, only the code that produces it.
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000) to view:
+- Metrics comparison tables (cross-validation and test RMSE / MAE / R²)
+- Model parameters and dataset metadata
+- Logged pipeline models and signatures
 
 ## Training Pipeline with Prefect
 

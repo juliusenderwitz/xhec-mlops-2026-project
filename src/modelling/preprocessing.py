@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pandas as pd
-from prefect import flow, task
+from prefect import task
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -82,7 +82,6 @@ def extract_x_y(
     return X, y
 
 
-@flow(name="Preprocess data")
 def build_preprocessor() -> ColumnTransformer:
     """Build the transformer that scales and encodes the features.
 

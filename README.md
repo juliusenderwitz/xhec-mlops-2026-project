@@ -19,8 +19,8 @@ We are building this as a production-style ML system, step by step:
 | Step | Content | Status |
 | --- | --- | --- |
 | 0 | Environment setup: dependencies, pre-commit hooks, CI | ✅ Done |
-| 1 | Model training and inference code | ⏳ To do |
-| 2 | Automated training pipeline with Prefect | ⏳ To do |
+| 1 | Model training and inference code | ✅ Done |
+| 2 | Automated training pipeline with Prefect | ✅ Done |
 | 3 | Prediction REST API (FastAPI + Pydantic) in Docker | ⏳ To do |
 
 ### Dataset
@@ -104,27 +104,96 @@ uv run pre-commit run --all-files      # run all hooks on the whole repo
 
 ```
 .
-├── .github/workflows/ci.yaml   # GitHub Actions CI
-├── .pre-commit-config.yaml     # pre-commit hooks
-├── pyproject.toml              # project metadata and dependencies
-├── uv.lock                     # pinned dependency versions
-├── tests/                      # pytest tests
-└── README.md
+├── .github/
+│   └── workflows/
+│       └── ci.yaml              # GitHub Actions CI pipeline (lint, format, test)
+├── assets/                      # Visual assets for documentation and guides
+├── data/                        # Local dataset storage (abalone.csv; gitignored)
+├── notebooks/                   # Jupyter notebooks for exploration and research
+│   ├── eda.ipynb                # Exploratory Data Analysis
+│   └── modelling.ipynb          # Model experimentation and MLflow tracking
+├── src/                         # Source code
+│   ├── modelling/               # ML training pipeline and Prefect orchestration
+│   │   ├── deployment.py        # Prefect deployment script for scheduled retraining
+│   │   ├── main.py              # End-to-end training flow entry point
+│   │   ├── predicting.py        # Model inference functions
+│   │   ├── preprocessing.py     # Data loading, cleaning, and feature encoding
+│   │   ├── training.py          # Model pipeline training and evaluation
+│   │   └── utils.py             # Serialization utilities (pickle/unpickle)
+│   └── web_service/             # Inference service and deployment artifacts
+│       └── local_objects/       # Serialized artifacts (model.pkl)
+├── tests/                       # Test suite executed with pytest
+│   ├── test_modelling/          # Unit tests for the modelling package
+│   │   ├── test_main.py         # Tests for the main training flow
+│   │   ├── test_predicting.py   # Tests for prediction routines
+│   │   ├── test_preprocessing.py# Tests for preprocessing and cleaning
+│   │   ├── test_training.py     # Tests for training and evaluation
+│   │   └── test_utils.py        # Tests for serialization helpers
+│   └── test_placeholder.py      # Placeholder test
+├── .gitignore                   # Files and directories ignored by Git
+├── .pre-commit-config.yaml      # Pre-commit git hooks configuration
+├── pyproject.toml               # Project metadata, dependencies, and tool settings
+├── README.md                    # Project documentation and setup instructions
+└── uv.lock                      # Lockfile with pinned dependency versions
 ```
 
 ## Experiment Tracking with MLflow
 
-The [modelling notebook](notebooks/modelling.ipynb) logs every model as an MLflow run in the experiment `abalone-rings`: parameters, metrics (cross-validation and test RMSE / MAE / R²) and the fitted pipeline. The runs are stored locally in `mlflow.db` and `mlruns/` at the root of the repository.
+We track model experiments using **MLflow**: every model (the baseline and linear regression) logs its hyperparameters, dataset splits, cross-validation metrics, test metrics (RMSE, MAE, R²), and the fitted pipeline artifact to the `abalone-rings` experiment.
 
-To compare the runs in the MLflow UI, run the notebook, then from the root of the repository:
+The tracking data is stored locally in `mlflow.db` (SQLite) and `mlruns/` at the root of the repository. Both are excluded via `.gitignore`.
+
+### 1. Run the experiments
+
+Execute the experiment tracking script from the root of the repository:
+
+```bash
+uv run python src/modelling/experiment.py data/abalone.csv
+```
+
+This runs 5-fold cross-validation and test set evaluations for all candidate models and logs each run into `mlflow.db`.
+
+### 2. View results in the MLflow UI
+
+Start the local MLflow server:
 
 ```bash
 uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
 ```
 
-and open http://127.0.0.1:5000.
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000) to view:
+- Metrics comparison tables (cross-validation and test RMSE / MAE / R²)
+- Model parameters and dataset metadata
+- Logged pipeline models and signatures
 
-`mlflow.db` and `mlruns/` are in `.gitignore`: never commit MLflow data, only the code that produces it.
+## Training Pipeline with Prefect
+
+The training code in `src/modelling` runs as a Prefect flow: each step (loading, cleaning, training, evaluating, saving the model) is a Prefect task. The commands below assume the dataset is saved as `data/abalone.csv`.
+
+1. Start the Prefect server (keep this terminal open):
+
+   ```bash
+   uv run prefect config set PREFECT_API_URL=http://0.0.0.0:4200/api
+   uv run prefect server start --host 0.0.0.0
+   ```
+
+   Open the UI at http://0.0.0.0:4200 (if it shows "Unable to connect to Prefect server", try http://127.0.0.1:4200 or another browser).
+
+2. In a second terminal, train the model once:
+
+   ```bash
+   uv run python src/modelling/main.py data/abalone.csv
+   ```
+
+   The run appears in the UI under **Runs**. Click it to see the graph of its tasks, their states and the logs (including the test metrics).
+
+3. Serve the deployment (retrains the model every Sunday at midnight):
+
+   ```bash
+   uv run python src/modelling/deployment.py
+   ```
+
+   The deployment and its scheduled runs appear in the UI under **Deployments**.
 
 ## Continuous Integration
 

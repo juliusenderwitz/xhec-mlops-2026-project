@@ -3,6 +3,7 @@
 import argparse
 from pathlib import Path
 
+from prefect import flow
 from preprocessing import drop_invalid_rows, extract_x_y, load_data
 from sklearn.model_selection import train_test_split
 from training import evaluate_model, train_model
@@ -17,6 +18,7 @@ TEST_SIZE = 0.2
 RANDOM_STATE = 42
 
 
+@flow(name="Train model")
 def main(trainset_path: Path) -> None:
     """Train a model using the data at the given path and save the model (pickle).
 

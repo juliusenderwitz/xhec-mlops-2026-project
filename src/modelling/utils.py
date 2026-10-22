@@ -4,7 +4,10 @@ import pickle
 from pathlib import Path
 from typing import Any
 
+from prefect import task
 
+
+@task(name="Pickle object")
 def pickle_object(obj: Any, path: str | Path) -> None:
     """Serialize an object to disk using pickle.
 

@@ -1,6 +1,7 @@
 """Training functions to fit and evaluate the abalone age prediction model."""
 
 import pandas as pd
+from prefect import task
 from preprocessing import build_preprocessor
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, r2_score, root_mean_squared_error
@@ -18,6 +19,7 @@ def build_pipeline() -> Pipeline:
     )
 
 
+@task(name="Train model")
 def train_model(X: pd.DataFrame, y: pd.Series) -> Pipeline:
     """Fit the pipeline (preprocessing + regressor) on the training data.
 
@@ -33,6 +35,7 @@ def train_model(X: pd.DataFrame, y: pd.Series) -> Pipeline:
     return pipeline
 
 
+@task(name="Evaluate model")
 def evaluate_model(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> dict[str, float]:
     """Compute the regression metrics of a fitted model.
 

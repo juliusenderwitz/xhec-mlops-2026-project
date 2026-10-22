@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pandas as pd
+from prefect import task
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -19,6 +20,7 @@ NUMERICAL_COLUMNS = [
 CATEGORICAL_COLUMNS = ["Sex"]
 
 
+@task(name="Load data")
 def load_data(path: str | Path) -> pd.DataFrame:
     """Load the abalone dataset from a CSV file.
 
@@ -34,6 +36,7 @@ def load_data(path: str | Path) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
+@task(name="Drop invalid rows")
 def drop_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
     """Drop the physically impossible rows found in the EDA.
 
@@ -55,6 +58,7 @@ def drop_invalid_rows(df: pd.DataFrame) -> pd.DataFrame:
     return df[~invalid].reset_index(drop=True)
 
 
+@task(name="Extract X and y")
 def extract_x_y(
     df: pd.DataFrame, target_column: str = TARGET_COLUMN
 ) -> tuple[pd.DataFrame, pd.Series]:

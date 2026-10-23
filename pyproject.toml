@@ -18,11 +18,13 @@ description = "X-HEC MLOps Project on Abalone age prediction model"
 requires-python = ">=3.10,<3.12"
 
 dependencies = [
+    "fastapi>=0.150.0",
     "mlflow>=3.17.2",
     "pandas>=2.3.3",
     "prefect>=3.8.8",
     "pydantic>=2.9",
     "scikit-learn>=1.7.2",
+    "uvicorn>=0.54.0",
 ]
 
 [dependency-groups]

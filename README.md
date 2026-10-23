@@ -6,6 +6,24 @@ This X-HEC MLOps project trains a regression model on the [Abalone dataset](http
 
 A fitted model is committed at `src/web_service/local_objects/model.pkl`, so the API works without downloading the dataset or retraining. The CSV is needed for training, experiments, and scheduled retraining.
 
+## Start here with Make
+
+Install Python **3.10 or 3.11**, [uv](https://docs.astral.sh/uv/getting-started/installation/), and GNU Make. From the repository root:
+
+On Windows, install GNU Make with `winget install --id ezwinports.make --exact --scope user`, then open a new terminal so the updated PATH takes effect.
+
+```bash
+make setup       # install dependencies from uv.lock
+make check       # lint, check formatting, and run tests
+make api         # serve the committed model at http://localhost:8000/docs
+```
+
+`make check` starts an isolated Prefect test backend automatically; you do not need to start the API or Prefect server first.
+
+To reproduce the model comparison and training results, download the [Abalone CSV](https://www.kaggle.com/datasets/rodolfomendes/abalone-dataset), save it as `data/abalone.csv`, then run `make reproduce`. This runs the checks, logs the baseline and linear regression results to MLflow, prints the training metrics, and saves the trained model. If your Prefect profile points to a local server, start it first with `make prefect` in another terminal. **Training overwrites** `src/web_service/local_objects/model.pkl`; restart the API to serve the new model. Use `make mlflow` in a separate terminal to inspect the experiment at [http://localhost:5000](http://localhost:5000).
+
+Run `make` to see the other shortcuts. You can run `make train` or `make experiment` separately, and override the CSV path with `make train DATA=path/to/abalone.csv`. The scheduled deployment uses `data/abalone.csv`. Docker remains optional: `make docker-build` followed by `make docker-run` starts the containerized API and Prefect server. The detailed commands below work directly without Make.
+
 ## Quick start: API in Docker
 
 Install [Docker](https://docs.docker.com/get-docker/) and start its daemon. From the repository root:

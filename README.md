@@ -1,31 +1,134 @@
-<div align="center">
-
-# MLOps Project: Abalone Age Prediction
+# Abalone ring prediction
 
 [![CI](https://github.com/juliusenderwitz/xhec-mlops-2026-project/actions/workflows/ci.yaml/badge.svg)](https://github.com/juliusenderwitz/xhec-mlops-2026-project/actions/workflows/ci.yaml)
-[![Python Version](https://img.shields.io/badge/python-3.10%20or%203.11-blue.svg)]()
-[![Linting: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Pre-commit](https://img.shields.io/badge/pre--commit-enabled-informational?logo=pre-commit&logoColor=white)](.pre-commit-config.yaml)
-</div>
 
-## Project Overview
+This X-HEC MLOps project trains a regression model on the [Abalone dataset](https://www.kaggle.com/datasets/rodolfomendes/abalone-dataset) and serves predictions through FastAPI. It also includes MLflow experiments and a Prefect training flow with an optional weekly deployment. The API response field is named `age`, but its value is a **predicted shell ring count**, a floating-point estimate rather than a rounded chronological age.
 
-This repository is our X-HEC MLOps group project. The goal is to predict the **age of abalone** (a type of sea snail) from physical measurements such as shell weight, diameter and height.
+A fitted model is committed at `src/web_service/local_objects/model.pkl`, so the API works without downloading the dataset or retraining. The CSV is needed for training, experiments, and scheduled retraining.
 
-Today, an abalone's age is found by cutting the shell, staining it and counting the rings under a microscope, which takes a long time. A model trained on easy-to-collect measurements can estimate the age much faster.
+## Quick start: API in Docker
 
-We are building this as a production-style ML system, step by step:
+Install [Docker](https://docs.docker.com/get-docker/) and start its daemon. From the repository root:
 
-| Step | Content | Status |
-| --- | --- | --- |
-| 0 | Environment setup: dependencies, pre-commit hooks, CI | ✅ Done |
-| 1 | Model training and inference code | ✅ Done |
-| 2 | Automated training pipeline with Prefect | ✅ Done |
-| 3 | Prediction REST API (FastAPI + Pydantic) in Docker | ⏳ To do |
+```bash
+docker build -f Dockerfile.app -t abalone-api .
+docker run --rm --name abalone-api -p 0.0.0.0:8000:8001 -p 0.0.0.0:4200:4201 abalone-api
+```
 
-### Dataset
+The container starts the prediction API and a Prefect server. Open the [interactive API documentation](http://localhost:8000/docs) to send a request. The [Prefect UI](http://localhost:4200) is also available. Stop both services with Ctrl+C. The image includes the committed model, but no dataset or scheduled training deployment; the Prefect UI has no training runs until you configure and run a flow.
 
-We use the [Abalone dataset from Kaggle](https://www.kaggle.com/datasets/rodolfomendes/abalone-dataset). Download it and put the CSV file in a `data/` folder at the root of the repository. The `data/` folder is not committed to Git.
+### Make a prediction
+
+Send a JSON object for **one** abalone to `POST /predict`. Field names with spaces must be quoted exactly as shown. In a macOS/Linux shell:
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H 'Content-Type: application/json' \
+  -d '{"Sex":"M","Length":0.455,"Diameter":0.365,"Height":0.095,"Whole weight":0.514,"Shucked weight":0.2245,"Viscera weight":0.101,"Shell weight":0.15}'
+```
+
+In PowerShell:
+
+```powershell
+$body = @{
+  Sex = 'M'; Length = 0.455; Diameter = 0.365; Height = 0.095
+  'Whole weight' = 0.514; 'Shucked weight' = 0.2245
+  'Viscera weight' = 0.101; 'Shell weight' = 0.15
+} | ConvertTo-Json
+Invoke-RestMethod -Uri http://localhost:8000/predict -Method Post -ContentType 'application/json' -Body $body
+```
+
+The response has the form `{"age": 10.5}`; the number depends on the model artifact. `GET /` returns a service check and `GET /docs` shows the schemas. `Sex` accepts `M`, `F`, or `I`; all measurements must be positive and `Height` must be at most `0.4`. Missing, extra, or invalid fields receive a validation error. The endpoint does not accept a batch of records.
+
+## Run locally
+
+Use Python **3.10 or 3.11**, [uv](https://docs.astral.sh/uv/getting-started/installation/), and Git. Clone the repository and install locked dependencies:
+
+```bash
+git clone https://github.com/juliusenderwitz/xhec-mlops-2026-project.git
+cd xhec-mlops-2026-project
+uv sync --locked
+```
+
+`uv` creates `.venv/`; use `uv run` for the commands below. To serve the committed model locally:
+
+```bash
+uv run uvicorn src.web_service.main:app --host 127.0.0.1 --port 8000
+```
+
+Use the [prediction example](#make-a-prediction) and URLs above. The local API does not start Prefect automatically. To use a newly trained model, restart the API: each process caches the loaded artifact.
+
+### Dataset and training
+
+Download the [Abalone CSV](https://www.kaggle.com/datasets/rodolfomendes/abalone-dataset) and save it as `data/abalone.csv`. Create `data/` if necessary. Its required header is:
+
+```text
+Sex,Length,Diameter,Height,Whole weight,Shucked weight,Viscera weight,Shell weight,Rings
+```
+
+The dataset is ignored by Git and omitted from the Docker image. From the repository root, train once with:
+
+```bash
+uv run python src/modelling/main.py data/abalone.csv
+```
+
+The Prefect flow loads the CSV, removes invalid rows, splits training and test data, fits a pipeline that scales numeric columns, one-hot encodes `Sex`, and applies linear regression. It prints test RMSE, MAE, and R², then writes the fitted pipeline to `src/web_service/local_objects/model.pkl`. This **overwrites the committed model file** in your checkout. The API reads that path for predictions.
+
+To see flow runs in Prefect, start a server in a separate terminal before training:
+
+```bash
+uv run prefect server start --host 127.0.0.1
+```
+
+Open [http://localhost:4200](http://localhost:4200). In the training terminal, point the Prefect client at that server and run the flow:
+
+```bash
+uv run prefect config set PREFECT_API_URL=http://127.0.0.1:4200/api
+uv run python src/modelling/main.py data/abalone.csv
+```
+
+To serve the scheduled deployment, keep the server running and use another terminal:
+
+```bash
+uv run python src/modelling/deployment.py
+```
+
+The deployment schedules training for **Sunday at 00:00** according to Prefect's configured timezone. Keep its process running for scheduled runs. It reads `data/abalone.csv` from the repository and overwrites the model artifact. Restart the API afterward. A plain Docker run does not start this deployment or include the CSV.
+
+### Compare models with MLflow
+
+With `data/abalone.csv` in place:
+
+```bash
+uv run python src/modelling/experiment.py data/abalone.csv
+uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
+```
+
+Open [http://localhost:5000](http://localhost:5000). The `abalone-rings` experiment compares a mean baseline and linear regression using five-fold cross-validation and a held-out test split. It logs parameters, RMSE, MAE, R², and fitted pipelines. Local tracking data in `mlflow.db` and `mlruns/` is ignored by Git. Experiments do not replace the API's model; use the training command for that.
+
+## Development and checks
+
+```bash
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+uv run pre-commit install
+uv run pre-commit run --all-files
+```
+
+Pre-commit checks file hygiene and configuration syntax, runs Ruff, and checks the lockfile. GitHub Actions runs lint, formatting, hooks, and tests on Python 3.10 and 3.11 for pushes and pull requests. Add dependencies with `uv add <package>` or development dependencies with `uv add --dev <package>`, then commit both `pyproject.toml` and `uv.lock`.
+
+## Repository map
+
+| Path | Purpose |
+| --- | --- |
+| `src/modelling/` | Data cleaning, training, inference helpers, Prefect flow and deployment, MLflow experiments |
+| `src/web_service/` | FastAPI routes, validated schemas, inference, and the committed model artifact |
+| `bin/run_services.sh` | Starts Prefect and Uvicorn in the container |
+| `Dockerfile.app` | Builds the API and Prefect image from locked runtime dependencies |
+| `notebooks/` | Exploratory analysis and model research |
+| `tests/` | Modelling and API checks |
+| `.github/workflows/ci.yaml` | Continuous integration |
 
 ## Team
 
@@ -35,197 +138,3 @@ We use the [Abalone dataset from Kaggle](https://www.kaggle.com/datasets/rodolfo
 | Kenza Chaabouni | [@chKenza](https://github.com/chKenza) |
 | Julius Enderwitz | [@juliusenderwitz](https://github.com/juliusenderwitz) |
 | Carl Aaron Heimann | [@aaron3636](https://github.com/aaron3636) |
-
-## Getting Started
-
-### Prerequisites
-
-- Python **3.10 or 3.11**
-- [uv](https://docs.astral.sh/uv/getting-started/installation/), which manages the Python environment and dependencies
-- Git
-
-To install uv on macOS or Linux:
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-On Windows, see the [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/).
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/juliusenderwitz/xhec-mlops-2026-project.git
-cd xhec-mlops-2026-project
-```
-
-### 2. Create the environment
-
-```bash
-uv sync
-```
-
-This command creates a virtual environment in `.venv/` and installs the exact versions pinned in `uv.lock`, including the dev tools (pytest, ruff, pre-commit).
-
-You can run any command inside the environment with `uv run <command>`. You can also activate the environment yourself:
-
-```bash
-source .venv/bin/activate      # macOS / Linux
-.venv\Scripts\activate         # Windows
-```
-
-### 3. Install the pre-commit hooks
-
-```bash
-uv run pre-commit install
-```
-
-After this, the hooks run on every `git commit`. They:
-
-- remove trailing whitespace and add a final newline to files
-- check that TOML, YAML and JSON files are valid
-- block large files from being committed
-- lint and auto-fix the code with `ruff check --fix`
-- format the code with `ruff format`
-- keep `uv.lock` in sync with `pyproject.toml`
-
-If a hook changes a file, the commit stops. Run `git add` on the changed files and commit again.
-
-### 4. Check that everything works
-
-```bash
-uv run pytest                          # run the tests
-uv run ruff check .                    # lint
-uv run ruff format --check .           # check formatting
-uv run pre-commit run --all-files      # run all hooks on the whole repo
-```
-
-## Project Structure
-
-```
-.
-├── .github/
-│   └── workflows/
-│       └── ci.yaml              # GitHub Actions CI pipeline (lint, format, test)
-├── assets/                      # Visual assets for documentation and guides
-├── data/                        # Local dataset storage (abalone.csv; gitignored)
-├── notebooks/                   # Jupyter notebooks for exploration and research
-│   ├── eda.ipynb                # Exploratory Data Analysis
-│   └── modelling.ipynb          # Model experimentation and MLflow tracking
-├── src/                         # Source code
-│   ├── modelling/               # ML training pipeline and Prefect orchestration
-│   │   ├── deployment.py        # Prefect deployment script for scheduled retraining
-│   │   ├── main.py              # End-to-end training flow entry point
-│   │   ├── predicting.py        # Model inference functions
-│   │   ├── preprocessing.py     # Data loading, cleaning, and feature encoding
-│   │   ├── training.py          # Model pipeline training and evaluation
-│   │   └── utils.py             # Serialization utilities (pickle/unpickle)
-│   └── web_service/             # Inference service and deployment artifacts
-│       └── local_objects/       # Serialized artifacts (model.pkl)
-├── tests/                       # Test suite executed with pytest
-│   ├── test_modelling/          # Unit tests for the modelling package
-│   │   ├── test_main.py         # Tests for the main training flow
-│   │   ├── test_predicting.py   # Tests for prediction routines
-│   │   ├── test_preprocessing.py# Tests for preprocessing and cleaning
-│   │   ├── test_training.py     # Tests for training and evaluation
-│   │   └── test_utils.py        # Tests for serialization helpers
-│   └── test_placeholder.py      # Placeholder test
-├── .gitignore                   # Files and directories ignored by Git
-├── .pre-commit-config.yaml      # Pre-commit git hooks configuration
-├── pyproject.toml               # Project metadata, dependencies, and tool settings
-├── README.md                    # Project documentation and setup instructions
-└── uv.lock                      # Lockfile with pinned dependency versions
-```
-
-## Experiment Tracking with MLflow
-
-We track model experiments using **MLflow**: every model (the baseline and linear regression) logs its hyperparameters, dataset splits, cross-validation metrics, test metrics (RMSE, MAE, R²), and the fitted pipeline artifact to the `abalone-rings` experiment.
-
-The tracking data is stored locally in `mlflow.db` (SQLite) and `mlruns/` at the root of the repository. Both are excluded via `.gitignore`.
-
-### 1. Run the experiments
-
-Execute the experiment tracking script from the root of the repository:
-
-```bash
-uv run python src/modelling/experiment.py data/abalone.csv
-```
-
-This runs 5-fold cross-validation and test set evaluations for all candidate models and logs each run into `mlflow.db`.
-
-### 2. View results in the MLflow UI
-
-Start the local MLflow server:
-
-```bash
-uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
-```
-
-Open [http://127.0.0.1:5000](http://127.0.0.1:5000) to view:
-- Metrics comparison tables (cross-validation and test RMSE / MAE / R²)
-- Model parameters and dataset metadata
-- Logged pipeline models and signatures
-
-## Training Pipeline with Prefect
-
-The training code in `src/modelling` runs as a Prefect flow: each step (loading, cleaning, training, evaluating, saving the model) is a Prefect task. The commands below assume the dataset is saved as `data/abalone.csv`.
-
-1. Start the Prefect server (keep this terminal open):
-
-   ```bash
-   uv run prefect config set PREFECT_API_URL=http://0.0.0.0:4200/api
-   uv run prefect server start --host 0.0.0.0
-   ```
-
-   Open the UI at http://0.0.0.0:4200 (if it shows "Unable to connect to Prefect server", try http://127.0.0.1:4200 or another browser).
-
-2. In a second terminal, train the model once:
-
-   ```bash
-   uv run python src/modelling/main.py data/abalone.csv
-   ```
-
-   The run appears in the UI under **Runs**. Click it to see the graph of its tasks, their states and the logs (including the test metrics).
-
-3. Serve the deployment (retrains the model every Sunday at midnight):
-
-   ```bash
-   uv run python src/modelling/deployment.py
-   ```
-
-   The deployment and its scheduled runs appear in the UI under **Deployments**.
-
-## Continuous Integration
-
-GitHub Actions runs [ci.yaml](.github/workflows/ci.yaml) on every push and pull request, with both Python 3.10 and 3.11. The CI:
-
-1. installs the dependencies with `uv sync --locked` (it fails if `uv.lock` is out of date)
-2. lints the code with `ruff check`
-3. checks the formatting with `ruff format --check`
-4. runs all pre-commit hooks
-5. runs the tests with `pytest` and measures coverage
-
-## Managing Dependencies
-
-Add a runtime dependency (needed by the model or the API):
-
-```bash
-uv add <package>
-```
-
-Add a dev-only dependency (testing, linting, notebooks):
-
-```bash
-uv add --dev <package>
-```
-
-Both commands update `pyproject.toml` and `uv.lock`. Commit both files so that everyone, including the CI, uses the same versions. After pulling changes from a teammate, run `uv sync` again.
-
-## How We Work
-
-The project is split into numbered branches, one per step. For each step we:
-
-1. switch to the branch and merge the latest `main` into it
-2. read the `PR_i.md` file for the step's tasks
-3. complete the tasks and make sure the CI passes
-4. open **one** pull request to `main` on **our** repository (not the original course repository) and merge it
